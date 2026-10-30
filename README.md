@@ -1,0 +1,247 @@
+# Ruang Rasa — Backend API
+
+Express + MongoDB + JWT untuk aplikasi **Ruang Rasa** (F&B dine-in). Frontend React ada di folder saudara `../ruang-rasa`.
+
+## Frontend pelanggan vs panel admin (CMS)
+
+| | **Web `ruang-rasa` (sekarang)** | **Backend API (sudah ada)** |
+|--|----------------------------------|-----------------------------|
+| Siapa | Pelanggan / tamu | Admin + integrasi web/mobile |
+| Fitur | Beranda, menu, keranjang, checkout | CRUD menu, kelola user, lihat & update status pesanan |
+| Login | Belum di UI (mock lokal) | JWT (`/api/auth/login`) |
+
+**Benar:** UI saat ini hanya alur **customer**. Untuk **admin** (kelola user & order, edit menu), idealnya tim frontend menambah halaman terpisah (mis. `/admin`) **atau** app admin sendiri — backend sudah menyiapkan endpoint dengan role `admin`. Sementara CMS belum ada, admin bisa tes lewat **Postman / Thunder Client** (langkah di bawah).
+
+---
+
+## Panduan step-by-step (Windows, untuk tim)
+
+### 0. Yang harus terinstall
+
+- **Node.js** 18+ ([nodejs.org](https://nodejs.org)) — cek: `node -v`
+- **MongoDB** — pilih salah satu:
+  - **Lokal:** [MongoDB Community](https://www.mongodb.com/try/download/community) — service harus jalan (port 27017), **atau**
+  - **Cloud:** [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) — buat cluster gratis, copy connection string ke `.env`
+
+### 1. Masuk folder backend
+
+```powershell
+cd "...\Final-TA\ruang-rasa-backend"
+```
+
+(Ganti `...` dengan path OneDrive/laptop masing-masing.)
+
+### 2. File environment
+
+```powershell
+copy .env.example .env
+```
+
+Isi `.env` (minimal):
+
+| Variabel | Contoh | Keterangan |
+|----------|--------|------------|
+| `PORT` | `5000` | Port API |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017/ruang_rasa` | Lokal, atau string Atlas |
+| `JWT_SECRET` | string panjang acak | Wajib untuk login |
+| `CORS_ORIGIN` | `http://localhost:5173` | URL frontend Vite |
+
+### 3. Install dependency (sekali)
+
+```powershell
+npm install
+```
+
+### 4. Isi database (menu + akun admin)
+
+```powershell
+npm run seed
+```
+
+Harus muncul kira-kira: `Seed 11 produk` dan `Admin dibuat: admin@ruangrasa.test / admin123`.  
+Jalankan lagi **`npm run seed`** hanya jika ingin **reset menu** (data produk dihapus & diisi ulang). Admin yang sudah ada tidak diduplikasi.
+
+### 5. Jalankan server development
+
+```powershell
+npm run dev
+```
+
+Berhasil jika terminal menampilkan:
+
+- `MongoDB connected`
+- `API Ruang Rasa berjalan di http://localhost:5000`
+
+Biarkan terminal ini **tetap terbuka** selama coding/testing.
+
+### 6. Cek API hidup
+
+Browser atau PowerShell:
+
+```powershell
+curl.exe http://localhost:5000/api/health
+```
+
+Respons OK: `"success":true`, `"status":"ok"`.
+
+Daftar menu:
+
+```powershell
+curl.exe http://localhost:5000/api/products
+```
+
+### 7. (Opsional) Login admin via PowerShell
+
+```powershell
+$body = @{ email = "admin@ruangrasa.test"; password = "admin123" } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5000/api/auth/login -Method POST -ContentType "application/json" -Body $body
+```
+
+Simpan **`token`** dari respons untuk request admin (header `Authorization: Bearer <token>`).
+
+### 8. Jalankan frontend (teman frontend — folder terpisah)
+
+```powershell
+cd "...\Final-TA\ruang-rasa"
+npm install
+npm run dev
+```
+
+Frontend biasanya `http://localhost:5173`. Hubungkan ke API dengan env `VITE_API_URL=http://localhost:5000` (saat tim sudah wiring fetch/axios).
+
+---
+
+## Troubleshooting
+
+### `EADDRINUSE` port 5000
+
+Port masih dipakai proses Node lama:
+
+```powershell
+netstat -ano | findstr :5000
+taskkill /PID <nomor_PID> /F
+```
+
+Lalu `npm run dev` lagi. Alternatif: ganti `PORT=5001` di `.env`.
+
+### MongoDB connection error
+
+- Lokal: pastikan service MongoDB running.
+- Atlas: IP whitelist (0.0.0.0/0 untuk dev), user/password benar di URI.
+
+### `JWT_SECRET wajib di-set`
+
+Isi `JWT_SECRET` di file `.env`, simpan, restart `npm run dev`.
+
+---
+
+## Admin tanpa CMS (Postman / Thunder Client)
+
+1. `POST http://localhost:5000/api/auth/login` — body JSON: `{ "email": "admin@ruangrasa.test", "password": "admin123" }`
+2. Copy `data.token`
+3. Tab Authorization → Bearer Token, tempel token
+4. Contoh:
+   - `GET /api/orders` — semua pesanan
+   - `PATCH /api/orders/<id>/status` — body: `{ "status": "confirmed" }`
+   - `POST /api/products` — tambah menu (admin)
+   - `GET /api/users` — daftar user
+
+---
+
+## Setup singkat (sudah pernah install)
+
+```powershell
+npm run dev
+```
+
+(API default: `http://localhost:5000` — asumsi `.env` dan `npm run seed` sudah pernah dijalankan.)
+
+## Akun seed (admin)
+
+- Email: `admin@ruangrasa.test`
+- Password: `admin123`  
+  (bisa diubah lewat `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` saat `npm run seed`)
+
+## Format response
+
+```json
+{ "success": true, "data": { ... } }
+{ "success": false, "message": "...", "errors": [ ... ] }
+```
+
+Header auth: `Authorization: Bearer <token>`
+
+---
+
+## Integrasi frontend (panduan untuk tim)
+
+Base URL: `VITE_API_URL=http://localhost:5000` (contoh env di Vite).
+
+### Produk (ganti array statis `products`)
+
+| Method | Path | Auth | Keterangan |
+|--------|------|------|------------|
+| GET | `/api/products` | — | Query: `?category=Makanan Utama`, `?search=nasi` |
+| GET | `/api/products/:id` | — | `:id` **numerik** (1–11), cocok dengan `/produk/:id` |
+
+Shape item (sama dengan frontend):
+
+```json
+{
+  "id": 1,
+  "name": "Nasi Goreng Kampung",
+  "category": "Makanan Utama",
+  "price": 22000,
+  "image": "/nasi-goreng-kampung.jpg",
+  "description": "..."
+}
+```
+
+Path gambar tetap relatif ke public Vite — tidak perlu diubah.
+
+### Kategori (opsional, ganti `categories` di beranda)
+
+| GET | `/api/categories` | — |
+
+### Checkout (`submitOrder` di `CheckoutPage`)
+
+| POST | `/api/orders` | opsional JWT |
+
+Body contoh:
+
+```json
+{
+  "customerName": "Budi",
+  "phone": "08123456789",
+  "orderType": "dine-in",
+  "paymentMethod": "qris",
+  "items": [
+    { "id": 1, "quantity": 2 },
+    { "id": 9, "quantity": 1 }
+  ],
+  "total": 51000
+}
+```
+
+Server menghitung ulang harga dari database; `total` opsional (dicek jika dikirim).  
+Guest checkout **tanpa token** diizinkan; jika user login, kirim `Authorization` agar pesanan tersimpan di `/api/orders/me`.
+
+### Auth (web/mobile — Soal 4)
+
+| POST | `/api/auth/register` | `{ name, email, password, phone? }` |
+| POST | `/api/auth/login` | `{ email, password }` → `{ token, user }` |
+| GET | `/api/auth/me` | Bearer token |
+
+### CRUD admin (Soal 2)
+
+| POST/PUT/DELETE | `/api/products/...` | Admin token |
+| GET/PUT/DELETE | `/api/users/...` | User sendiri atau admin |
+| GET | `/api/orders` | Admin — daftar pesanan |
+| PATCH | `/api/orders/:id/status` | Admin |
+
+---
+
+## Deploy
+
+Set env di cloud: `PORT`, `MONGODB_URI`, `JWT_SECRET`, `CORS_ORIGIN` (URL frontend + Expo).  
+Jalankan `npm run seed` sekali di environment production/staging setelah DB kosong.
