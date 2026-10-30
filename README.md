@@ -45,6 +45,8 @@ Isi `.env` (minimal):
 | `MONGODB_URI` | `mongodb://127.0.0.1:27017/ruang_rasa` | Lokal, atau string Atlas |
 | `JWT_SECRET` | string panjang acak | Wajib untuk login |
 | `CORS_ORIGIN` | `http://localhost:5173` | URL frontend Vite |
+| `SEED_ADMIN_EMAIL` | email buatan tim | Wajib untuk `npm run seed` |
+| `SEED_ADMIN_PASSWORD` | password min. 6 karakter | Wajib untuk `npm run seed`; **hanya di `.env`**, tidak di git |
 
 ### 3. Install dependency (sekali)
 
@@ -58,7 +60,8 @@ npm install
 npm run seed
 ```
 
-Harus muncul kira-kira: `Seed 11 produk` dan `Admin dibuat: admin@ruangrasa.test / admin123`.  
+Harus muncul kira-kira: `Seed 11 produk` dan `Admin dibuat untuk email: ...`.  
+Email/password admin = nilai **`SEED_ADMIN_*`** di `.env` masing-masing (bagikan ke tim secara privat, bukan lewat git).  
 Jalankan lagi **`npm run seed`** hanya jika ingin **reset menu** (data produk dihapus & diisi ulang). Admin yang sudah ada tidak diduplikasi.
 
 ### 5. Jalankan server development
@@ -93,7 +96,8 @@ curl.exe http://localhost:5000/api/products
 ### 7. (Opsional) Login admin via PowerShell
 
 ```powershell
-$body = @{ email = "admin@ruangrasa.test"; password = "admin123" } | ConvertTo-Json
+# Pakai email/password yang sama dengan SEED_ADMIN_* di .env
+$body = @{ email = "admin@example.com"; password = "password-dari-env" } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:5000/api/auth/login -Method POST -ContentType "application/json" -Body $body
 ```
 
@@ -137,7 +141,7 @@ Isi `JWT_SECRET` di file `.env`, simpan, restart `npm run dev`.
 
 ## Admin tanpa CMS (Postman / Thunder Client)
 
-1. `POST http://localhost:5000/api/auth/login` — body JSON: `{ "email": "admin@ruangrasa.test", "password": "admin123" }`
+1. `POST http://localhost:5000/api/auth/login` — body JSON: `{ "email": "<SEED_ADMIN_EMAIL>", "password": "<SEED_ADMIN_PASSWORD>" }` dari `.env` tim
 2. Copy `data.token`
 3. Tab Authorization → Bearer Token, tempel token
 4. Contoh:
@@ -158,9 +162,12 @@ npm run dev
 
 ## Akun seed (admin)
 
-- Email: `admin@ruangrasa.test`
-- Password: `admin123`  
-  (bisa diubah lewat `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` saat `npm run seed`)
+Tidak ada password bawaan di kode. Tim **menentukan sendiri** di file **`.env`** ( tidak di-push ke git ):
+
+- `SEED_ADMIN_EMAIL`
+- `SEED_ADMIN_PASSWORD`
+
+Setelah `npm run seed`, login admin memakai pasangan email/password itu di `/api/auth/login`.
 
 ## Format response
 
@@ -172,76 +179,3 @@ npm run dev
 Header auth: `Authorization: Bearer <token>`
 
 ---
-
-## Integrasi frontend (panduan untuk tim)
-
-Base URL: `VITE_API_URL=http://localhost:5000` (contoh env di Vite).
-
-### Produk (ganti array statis `products`)
-
-| Method | Path | Auth | Keterangan |
-|--------|------|------|------------|
-| GET | `/api/products` | — | Query: `?category=Makanan Utama`, `?search=nasi` |
-| GET | `/api/products/:id` | — | `:id` **numerik** (1–11), cocok dengan `/produk/:id` |
-
-Shape item (sama dengan frontend):
-
-```json
-{
-  "id": 1,
-  "name": "Nasi Goreng Kampung",
-  "category": "Makanan Utama",
-  "price": 22000,
-  "image": "/nasi-goreng-kampung.jpg",
-  "description": "..."
-}
-```
-
-Path gambar tetap relatif ke public Vite — tidak perlu diubah.
-
-### Kategori (opsional, ganti `categories` di beranda)
-
-| GET | `/api/categories` | — |
-
-### Checkout (`submitOrder` di `CheckoutPage`)
-
-| POST | `/api/orders` | opsional JWT |
-
-Body contoh:
-
-```json
-{
-  "customerName": "Budi",
-  "phone": "08123456789",
-  "orderType": "dine-in",
-  "paymentMethod": "qris",
-  "items": [
-    { "id": 1, "quantity": 2 },
-    { "id": 9, "quantity": 1 }
-  ],
-  "total": 51000
-}
-```
-
-Server menghitung ulang harga dari database; `total` opsional (dicek jika dikirim).  
-Guest checkout **tanpa token** diizinkan; jika user login, kirim `Authorization` agar pesanan tersimpan di `/api/orders/me`.
-
-### Auth (web/mobile — Soal 4)
-
-| POST | `/api/auth/register` | `{ name, email, password, phone? }` |
-| POST | `/api/auth/login` | `{ email, password }` → `{ token, user }` |
-| GET | `/api/auth/me` | Bearer token |
-
-### CRUD admin (Soal 2)
-
-| POST/PUT/DELETE | `/api/products/...` | Admin token |
-| GET/PUT/DELETE | `/api/users/...` | User sendiri atau admin |
-| GET | `/api/orders` | Admin — daftar pesanan |
-| PATCH | `/api/orders/:id/status` | Admin |
-
----
-
-## Deploy
-
-Set env di cloud: `PORT`, `MONGODB_URI`, `JWT_SECRET`, `CORS_ORIGIN` (URL frontend + Expo).  
-Jalankan `npm run seed` sekali di environment production/staging setelah DB kosong.

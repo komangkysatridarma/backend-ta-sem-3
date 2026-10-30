@@ -17,8 +17,19 @@ async function seed() {
   await Product.insertMany(seedProducts);
   console.log(`Seed ${seedProducts.length} produk`);
 
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@ruangrasa.test";
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || "admin123";
+  const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) {
+    console.error(
+      "SEED_ADMIN_EMAIL dan SEED_ADMIN_PASSWORD wajib di-set di file .env (lihat .env.example)"
+    );
+    process.exit(1);
+  }
+  if (adminPassword.length < 6) {
+    console.error("SEED_ADMIN_PASSWORD minimal 6 karakter");
+    process.exit(1);
+  }
 
   const existingAdmin = await User.findOne({ email: adminEmail });
   if (!existingAdmin) {
@@ -29,9 +40,9 @@ async function seed() {
       role: "admin",
       phone: "08123456789",
     });
-    console.log(`Admin dibuat: ${adminEmail} / ${adminPassword}`);
+    console.log(`Admin dibuat untuk email: ${adminEmail} (password dari .env, tidak ditampilkan)`);
   } else {
-    console.log("Admin sudah ada, dilewati");
+    console.log(`Admin dengan email ${adminEmail} sudah ada, dilewati`);
   }
 
   process.exit(0);
